@@ -1,5 +1,7 @@
+from http import HTTPStatus
+
 from aiogoogle import Aiogoogle
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_async_session
@@ -27,17 +29,29 @@ async def get_report(
         session
     )
 
-    spreadsheetid = await create_spreadsheets(wrapper_services)
+    result = await create_spreadsheets(wrapper_services)
+
+    spreadsheet_id = result['spreadsheetId']
+    spreadsheet_url = result['spreadsheetUrl']
 
     await set_user_permissions(
-        spreadsheetid,
+        spreadsheet_id,
         wrapper_services
     )
+    try:
+        await update_spreadsheets_value(
+            spreadsheet_id,
+            projects,
+            wrapper_services
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail='Не удалось сформировать отчёт.',
+        )
 
-    await update_spreadsheets_value(
-        spreadsheetid,
-        projects,
-        wrapper_services
-    )
-
-    return {'spreadsheetId': spreadsheetid}
+    return {
+        'spreadsheetId': spreadsheet_id,
+        'spreadsheetUrl': spreadsheet_url,
+        'url': spreadsheet_url,
+    }
